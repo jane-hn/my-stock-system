@@ -1,0 +1,18 @@
+# Render.com Blueprint 部署配置
+# 用法：登录 Render → New + → Blueprint → 选择本仓库 → 一键部署
+# 部署时会提示填写 TOKEN（你的访问密码），填一个长一点的密码即可
+services:
+  - type: web
+    name: my-stock-system        # 网址前缀：https://my-stock-system.onrender.com
+    runtime: node
+    plan: free                    # 免费实例（15 分钟无人访问会休眠，约 30-60 秒唤醒）
+    region: singapore             # 离中国大陆最近
+    branch: main
+    buildCommand: ""              # 零依赖，无需构建
+    startCommand: node server.js
+    healthCheckPath: /api/ping
+    envVars:
+      - key: TOKEN                # 数据访问密码（同步令牌），部署时提示填写
+        sync: false
+      - key: NODE_VERSION
+        value: 22
