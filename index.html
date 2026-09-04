@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>个人炒股交易系统</title>
+<meta name="description" content="思想沉淀 · 交易复盘 · 个股问询（离线可用，支持云端同步）">
+<meta name="theme-color" content="#0e1116">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="交易系统">
+<link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='2' y='10' width='4' height='9' fill='%23f6465d'/%3E%3Crect x='3.5' y='6' width='1' height='16' fill='%23f6465d'/%3E%3Crect x='10' y='5' width='4' height='9' fill='%232ebd85'/%3E%3Crect x='11.5' y='2' width='1' height='17' fill='%232ebd85'/%3E%3Crect x='18' y='8' width='4' height='10' fill='%23f6465d'/%3E%3Crect x='19.5' y='4' width='1' height='18' fill='%23f6465d'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<header class="app-header">
+  <div class="header-inner">
+    <div class="brand">
+      <svg class="brand-logo" viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="2" y="10" width="4" height="9" fill="var(--up)"/>
+        <rect x="3.5" y="6" width="1" height="16" fill="var(--up)"/>
+        <rect x="10" y="5" width="4" height="9" fill="var(--down)"/>
+        <rect x="11.5" y="2" width="1" height="17" fill="var(--down)"/>
+        <rect x="18" y="8" width="4" height="10" fill="var(--up)"/>
+        <rect x="19.5" y="4" width="1" height="18" fill="var(--up)"/>
+      </svg>
+      <div class="brand-text">
+        <h1>个人炒股交易系统</h1>
+        <p>思想沉淀 · 交易复盘 · 个股问询</p>
+      </div>
+    </div>
+    <nav class="tabs" id="nav" aria-label="主导航"></nav>
+    <div class="header-right">
+      <span class="save-badge sync-badge" id="syncBadge" hidden></span>
+      <span class="save-badge" id="saveBadge">本地待保存</span>
+    </div>
+  </div>
+  <div class="storage-warn" id="storageWarn" hidden>
+    当前浏览器禁用了本地存储，数据无法保存。请改用 Chrome / Edge 直接双击打开本页，详见 README。
+  </div>
+</header>
+
+<main id="view" class="view-container"></main>
+
+<footer class="app-footer">
+  <p>数据默认保存在本机浏览器 · 在「设置」配置云端同步后，电脑关机也能用手机随时记账复盘 · 请定期导出 JSON 备份</p>
+</footer>
+
+<div id="modalRoot"></div>
+<div id="toastRoot" class="toast-root" aria-live="polite"></div>
+
+<script src="./js/store.js"></script>
+<script src="./js/sync.js"></script>
+<script src="./js/components.js"></script>
+<script src="./js/view-dashboard.js"></script>
+<script src="./js/view-principles.js"></script>
+<script src="./js/view-trades.js"></script>
+<script src="./js/view-review.js"></script>
+<script src="./js/view-check.js"></script>
+<script src="./js/view-settings.js"></script>
+<script src="./js/app.js"></script>
+</body>
+</html>

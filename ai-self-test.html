@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>本地 AI 自检工具</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, "Microsoft YaHei", sans-serif; background: #0d1117; color: #c9d1d9; padding: 24px; line-height: 1.6; }
+  h1 { color: #58a6ff; margin-bottom: 16px; font-size: 22px; }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-bottom: 16px; }
+  .card h2 { font-size: 16px; color: #8b949e; margin-bottom: 12px; }
+  .step { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0; border-bottom: 1px solid #21262d; }
+  .step:last-child { border: none; }
+  .step-num { width: 28px; height: 28px; border-radius: 50%; background: #238636; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; flex-shrink: 0; }
+  .step-num.fail { background: #da3633; }
+  .step-num.pending { background: #d29922; }
+  .step-num.idle { background: #30363d; }
+  .step-content { flex: 1; }
+  .step-title { font-weight: 600; color: #e3edfd; }
+  .step-detail { color: #8b949e; font-size: 13px; margin-top: 4px; white-space: pre-wrap; word-break: break-all; }
+  .step-detail.ok { color: #3fb950; }
+  .step-detail.err { color: #f85149; }
+  .btn { display: inline-block; padding: 8px 20px; border-radius: 6px; border: none; font-size: 14px; font-weight: 600; cursor: pointer; margin-right: 8px; }
+  .btn-go { background: #238636; color: #fff; }
+  .btn-go:hover { background: #2ea043; }
+  .btn-ghost { background: #21262d; color: #c9d1d9; border: 1px solid #30363d; }
+  .actions { margin: 16px 0; }
+  .config { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+  .config label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: #8b949e; }
+  .config input { background: #0d1117; border: 1px solid #30363d; border-radius: 4px; padding: 6px 10px; color: #c9d1d9; font-size: 14px; width: 280px; }
+  .config input:focus { border-color: #58a6ff; outline: none; }
+  .tag { display: inline-block; background: #21262d; border: 1px solid #30363d; border-radius: 4px; padding: 2px 8px; margin: 2px; font-size: 12px; color: #79c0ff; }
+  .hint { background: #161b22; border-left: 3px solid #58a6ff; padding: 12px 16px; margin-bottom: 16px; border-radius: 0 6px 6px 0; font-size: 13px; color: #8b949e; }
+  .hint b { color: #e3edfd; }
+  .warn { background: #161b22; border-left: 3px solid #d29922; padding: 12px 16px; margin-bottom: 16px; border-radius: 0 6px 6px 0; font-size: 13px; color: #d29922; }
+  .warn b { color: #e3edfd; }
+</style>
+</head>
+<body>
+
+<h1>本地 AI 自检工具</h1>
+<p style="color:#8b949e;margin-bottom:16px">用浏览器直接打开此页面即可验证本机 Ollama 是否正常工作。全程离线，不发送任何数据到外部。</p>
+
+<div class="hint">
+  <b>使用方法：</b>把此文件下载到你的电脑上，用 Chrome 或 Edge 双击打开，点击「开始自检」即可。
+</div>
+
+<div id="envWarn"></div>
+
+<div class="config">
+  <label>
+    Ollama 地址
+    <input type="text" id="url" value="http://localhost:11434" placeholder="http://localhost:11434">
+  </label>
+  <label>
+    模型名称
+    <input type="text" id="model" value="qwen2.5:7b" placeholder="qwen2.5:7b">
+  </label>
+</div>
+
+<div class="actions">
+  <button class="btn btn-go" onclick="runTest()">开始自检</button>
+  <button class="btn btn-ghost" onclick="resetTest()">重置</button>
+</div>
+
+<div id="results"></div>
+
+<script>
+function $(id) { return document.getElementById(id); }
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+/* 检测打开方式：file:// 才是最可靠的，http:// 可能存在跨域问题 */
+function checkEnv() {
+  var proto = location.protocol;
+  var box = $('envWarn');
+  if (proto === 'file:') {
+    box.innerHTML = '<div class="hint" style="border-left-color:#238636"><b>✓ 本地文件模式</b>——这是最可靠的方式，直接连接本机 Ollama。</div>';
+  } else if (proto === 'http:' || proto === 'https:') {
+    box.innerHTML = '<div class="warn"><b>⚠ 注意：</b>当前从 <code>' + esc(location.origin) + '</code> 打开本页。'
+      + '如果你的 Ollama 地址和本页地址不同源（比如本页是 http://127.0.0.1:8000 而 Ollama 是 http://localhost:11434），'
+      + '浏览器可能因跨域拦截请求。建议改为用 <b>file://</b> 方式打开此文件（双击文件即可）。</div>';
+  } else {
+    box.innerHTML = '<div class="warn"><b>⚠ 非标准打开方式</b>（' + esc(proto) + '），建议直接双击文件用浏览器打开。</div>';
+  }
+}
+
+/* 超时控制 */
+function withTimeout(ms) {
+  var ctrl = new AbortController();
+  setTimeout(function () { ctrl.abort(); }, ms);
+  return ctrl.signal;
+}
+
+/* 直接用绝对 URL 请求 Ollama API，不做任何回退 */
+function buildUrl(rawUrl, path) {
+  return rawUrl.replace(/\/+$/, '') + path;
+}
+
+function setStep(idx, status, title, detail, detailCls) {
+  var box = $('results');
+  var steps = box.querySelectorAll('.step');
+  var step = steps[idx];
+  if (!step) return;
+  var num = step.querySelector('.step-num');
+  num.className = 'step-num ' + status;
+  if (status === 'pending') num.textContent = '…'; else num.textContent = idx + 1;
+  step.querySelector('.step-title').textContent = title;
+  var d = step.querySelector('.step-detail');
+  d.textContent = detail || '';
+  d.className = 'step-detail ' + (detailCls || '');
+}
+
+function initSteps() {
+  var steps = [
+    { t: '检查 Ollama 服务连通性', d: '点击「开始自检」后自动执行' },
+    { t: '列出本机可用模型', d: '' },
+    { t: '发送测试对话请求', d: '' },
+    { t: '验证模型回复内容', d: '' }
+  ];
+  $('results').innerHTML = steps.map(function(s, i) {
+    return '<div class="step">' +
+      '<div class="step-num idle">' + (i+1) + '</div>' +
+      '<div class="step-content">' +
+        '<div class="step-title">' + esc(s.t) + '</div>' +
+        '<div class="step-detail">' + esc(s.d) + '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function resetTest() { initSteps(); }
+
+/* 根据错误类型返回精准的排查建议 */
+function diagnoseError(err, rawUrl) {
+  var msg = err.message || String(err);
+  if (msg === 'Failed to fetch' || msg.indexOf('NetworkError') >= 0) {
+    return msg + '\n\n这通常意味着浏览器无法连接到 ' + rawUrl + '。排查步骤：\n' +
+      '1. 确认 Ollama 已安装：终端运行 ollama --version\n' +
+      '2. 确认服务已启动：终端运行 ollama serve（或桌面版保持运行）\n' +
+      '3. 浏览器直接访问 ' + rawUrl + ' ——应该看到 "Ollama is running"\n' +
+      '4. 如本页从 http:// 地址打开且 Ollama 在不同端口，需设置跨域：\n' +
+      '   设置环境变量 OLLAMA_ORIGINS=* 并重启 Ollama\n' +
+      '5. 推荐改为 file:// 方式打开本文件（双击即可），可避免跨域问题';
+  }
+  if (msg.indexOf('HTTP 404') >= 0) {
+    return msg + '\n\n服务器返回 404，可能原因：\n' +
+      '1. 端口 11434 上可能运行了其他服务而非 Ollama\n' +
+      '2. 浏览器请求被重定向到了其他服务器（如本地静态文件服务器）\n' +
+      '3. 推荐改为 file:// 方式打开本文件（双击即可），确保请求直达 Ollama';
+  }
+  if (msg.indexOf('HTTP 403') >= 0) {
+    return msg + '\n\n跨域被拒绝。请设置环境变量 OLLAMA_ORIGINS=* 并重启 Ollama。';
+  }
+  if (msg.indexOf('aborted') >= 0 || msg.indexOf('timeout') >= 0 || msg.indexOf('Abort') >= 0) {
+    return msg + '\n\n请求超时，模型可能正在加载中（首次推理较慢）。请确认 Ollama 正在运行后重试。';
+  }
+  return msg + '\n\n排查步骤：\n' +
+    '1. 确认 Ollama 已安装并运行：终端运行 ollama serve\n' +
+    '2. 确认模型已拉取：终端运行 ollama list\n' +
+    '3. 推荐用 file:// 方式打开本文件';
+}
+
+async function runTest() {
+  var rawUrl = $('url').value.trim().replace(/\/+$/, '');
+  var model = $('model').value.trim();
+  var box = $('results');
+
+  /* Step 1: 连通性测试 */
+  setStep(0, 'pending', '正在连接 ' + rawUrl + ' …', '');
+  try {
+    var resp = await fetch(buildUrl(rawUrl, '/api/tags'), { signal: withTimeout(8000) });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    var data = await resp.json();
+    var models = (data.models || []).map(function(m) { return m.name; });
+    setStep(0, 'idle', 'Ollama 服务连通', '返回状态：正常', 'ok');
+
+    /* Step 2: 列出模型 */
+    if (!models.length) {
+      setStep(1, 'fail', '本机没有模型', '请先执行 ollama pull ' + (model || 'qwen2.5:7b') + ' 拉取模型', 'err');
+      setStep(2, 'fail', '跳过（无可用模型）', '', 'err');
+      setStep(3, 'fail', '跳过（无可用模型）', '', 'err');
+      return;
+    }
+    var modelHtml = models.map(function(m) { return '<span class="tag">' + esc(m) + '</span>'; }).join('');
+    setStep(1, 'idle', '发现 ' + models.length + ' 个可用模型', modelHtml);
+    /* auto-fill model if empty */
+    if (!model) { $('model').value = models[0]; model = models[0]; }
+
+    /* Step 3: 发送测试对话 */
+    setStep(2, 'pending', '正在向模型 ' + model + ' 发送测试问题…', '');
+    var testQ = '请用一句话回答：1+1等于几？';
+    var t0 = Date.now();
+    var chatResp = await fetch(buildUrl(rawUrl, '/api/chat'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: model,
+        messages: [
+          { role: 'system', content: '你是一个简洁的回答助手，用最少的字回答问题。' },
+          { role: 'user', content: testQ }
+        ],
+        stream: false
+      }),
+      signal: withTimeout(120000)
+    });
+    if (!chatResp.ok) throw new Error('HTTP ' + chatResp.status);
+    var chatData = await chatResp.json();
+    var elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+    var content = chatData && chatData.message && chatData.message.content;
+    if (!content) throw new Error('模型未返回内容');
+
+    /* Step 4: 验证回复 */
+    setStep(2, 'idle', '模型回复成功', '耗时 ' + elapsed + ' 秒', 'ok');
+    setStep(3, 'idle', 'AI 自检通过', '回复内容：' + content.trim().slice(0, 100), 'ok');
+
+    /* Summary */
+    var summary = document.createElement('div');
+    summary.className = 'card';
+    summary.style.borderColor = '#238636';
+    summary.innerHTML = '<h2 style="color:#3fb950">✅ 全部通过</h2>' +
+      '<p>本机 Ollama 运行正常，模型 <b>' + esc(model) + '</b> 可正常对话。</p>' +
+      '<p style="margin-top:8px">现在可以打开 <code>index.html</code>，到「个股问询」页使用 AI 分析功能了。</p>';
+    box.appendChild(summary);
+
+  } catch (err) {
+    /* Determine which step failed */
+    var failStep = 0;
+    var steps = box.querySelectorAll('.step');
+    for (var i = 0; i < steps.length; i++) {
+      var num = steps[i].querySelector('.step-num');
+      if (num.classList.contains('pending')) { failStep = i; break; }
+    }
+    setStep(failStep, 'fail', '连接失败', diagnoseError(err, rawUrl), 'err');
+
+    /* Mark remaining steps as skipped */
+    for (var j = failStep + 1; j < steps.length; j++) {
+      setStep(j, 'fail', '跳过（前序步骤失败）', '', 'err');
+    }
+  }
+}
+
+checkEnv();
+initSteps();
+</script>
+</body>
+</html>

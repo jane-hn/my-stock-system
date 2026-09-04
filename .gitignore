@@ -1,0 +1,9 @@
+# 本机私有数据（云端部署时绝不上传，见部署指南）
+cloud-data.json
+cloud-data.json.tmp
+
+# 运行时与系统文件
+node_modules/
+.DS_Store
+Thumbs.db
+*.log
